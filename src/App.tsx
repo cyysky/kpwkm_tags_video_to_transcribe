@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect, useCallback, ChangeEvent, DragEvent } from 'react'
 import axios from 'axios'
+import { Button } from './components/ui/button'
+import { Card } from './components/ui/card'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './components/ui/table'
 
 const API_BASE = '/api'
 
@@ -32,23 +35,47 @@ interface Log {
 }
 
 type TabType = 'transcribe' | 'srt-edit' | 'files'
-type ButtonVariant = 'default' | 'outline'
 
-interface SectionCardProps {
-  icon: string
-  title: string
-  children: React.ReactNode
-}
-
-interface UiButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: ButtonVariant
-}
-
-const tabConfig: Array<{ id: TabType; label: string; icon: string }> = [
-  { id: 'transcribe', label: 'Transcribe', icon: '🎬' },
-  { id: 'srt-edit', label: 'SRT Editor', icon: '📝' },
-  { id: 'files', label: 'Files', icon: '📂' }
+const tabConfig: Array<{ id: TabType; label: string; hint: string }> = [
+  { id: 'transcribe', label: 'New transcription', hint: 'Upload court media' },
+  { id: 'srt-edit', label: 'Transcript editor', hint: 'Edit .srt files' },
+  { id: 'files', label: 'Library', hint: 'All jobs & exports' }
 ]
+
+function IconUpload(props: { className?: string }) {
+  return (
+    <svg className={props.className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M12 16V4M12 4l-4 4M12 4l4 4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 20h16" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function IconDoc(props: { className?: string }) {
+  return (
+    <svg className={props.className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" strokeLinejoin="round" />
+      <path d="M14 3v5h5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconFolder(props: { className?: string }) {
+  return (
+    <svg className={props.className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function IconFilm(props: { className?: string }) {
+  return (
+    <svg className={props.className} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="2" y="5" width="20" height="14" rx="2" />
+      <path d="M7 5v14M17 5v14" strokeLinecap="round" />
+    </svg>
+  )
+}
 
 function parseSrt(srtContent: string | null): SrtSegment[] {
   if (!srtContent) return []
@@ -82,28 +109,6 @@ function formatSrtTimestamp(seconds: number): string {
   const s = Math.floor(seconds % 60)
   const ms = Math.floor((seconds % 1) * 1000)
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`
-}
-
-function SectionCard({ icon, title, children }: SectionCardProps) {
-  return (
-    <section className="overflow-hidden rounded-[1.125rem] border border-slate-200 bg-white/95 shadow-sm">
-      <header className="flex items-center gap-3 border-b border-slate-200/80 px-6 py-4">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-blue-100 bg-blue-50 text-lg text-blue-700">{icon}</span>
-        <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-slate-900">{title}</h2>
-      </header>
-      <div className="p-6">{children}</div>
-    </section>
-  )
-}
-
-function UiButton({ variant = 'outline', className = '', ...props }: UiButtonProps) {
-  const base =
-    'inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60'
-  const variants: Record<ButtonVariant, string> = {
-    default: 'border-blue-700 bg-blue-700 text-white hover:bg-blue-800',
-    outline: 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900'
-  }
-  return <button className={`${base} ${variants[variant]} ${className}`.trim()} {...props} />
 }
 
 function App() {
@@ -327,298 +332,427 @@ function App() {
 
   const completeFiles = files.filter(f => f.status === 'complete')
 
-  return (
-    <div className="min-h-screen pb-8">
-      <header className="mx-auto mt-5 w-full max-w-[1600px] px-4 sm:px-6">
-        <div className="rounded-[1.375rem] border border-slate-200 bg-white/90 px-6 py-6 shadow-[0_18px_60px_rgba(148,163,184,0.16)] backdrop-blur">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">Court Automation Suite</p>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-950 sm:text-3xl">Court Transcription System</h1>
-            <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-blue-700">
-              Live Processing
-            </span>
-          </div>
-          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600 sm:text-base">
-            Upload recordings, monitor transcription jobs in real time, and edit subtitle output from one modern workflow.
-          </p>
-        </div>
-      </header>
+  const tabIcon = (id: TabType) => {
+    if (id === 'transcribe') return <IconUpload className="shrink-0 opacity-90" />
+    if (id === 'srt-edit') return <IconDoc className="shrink-0 opacity-90" />
+    return <IconFolder className="shrink-0 opacity-90" />
+  }
 
-      <main className="mx-auto mt-6 grid w-full max-w-[1600px] gap-6 px-4 sm:px-6 xl:grid-cols-[1fr_420px]">
-        <section className="space-y-6">
-          <SectionCard icon="🎬" title="Video Player With Subtitles">
-            {currentFile ? (
-              <div className="relative overflow-hidden rounded-[1.125rem] border border-slate-200 bg-slate-950">
-                <div className="absolute left-3 top-3 z-10 max-w-[70%] truncate rounded-lg bg-slate-900/85 px-3 py-1 text-xs font-medium text-slate-100">
-                  {currentFile.originalName}
+  return (
+    <div className="civic-shell-bg flex min-h-screen flex-col lg:flex-row">
+      {/* Primary navigation — civic rail aligned with Sabah Civic Platform sidebar language */}
+      <aside className="flex shrink-0 flex-col border-slate-200/80 bg-slate-950 text-slate-300 shadow-[0_24px_60px_rgba(2,6,23,0.35)] lg:w-[17rem] lg:border-r lg:shadow-none">
+        <div className="relative hidden overflow-hidden border-b border-white/10 px-5 py-6 lg:block">
+          <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(29,78,216,0.12),transparent_45%,rgba(2,6,23,0.4)_100%)]" />
+          <div className="relative flex items-start gap-3">
+            <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-700 shadow-[0_10px_30px_rgba(29,78,216,0.35)]">
+              <IconDoc className="h-5 w-5 text-white" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/80">Court services</p>
+              <h1 className="mt-1.5 text-lg font-semibold leading-snug tracking-tight text-white">Transcription workspace</h1>
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">Official record preparation. Same processing pipeline as before.</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-1 overflow-x-auto border-b border-white/10 px-2 py-2 lg:flex-col lg:border-b-0 lg:space-y-1.5 lg:px-4 lg:py-5">
+          {tabConfig.map(tab => {
+            const active = activeTab === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex min-w-[140px] shrink-0 items-start gap-3 rounded-xl px-3.5 py-3 text-left transition-all duration-200 lg:min-w-0 lg:w-full ${
+                  active
+                    ? 'bg-blue-600/18 text-white ring-1 ring-inset ring-blue-400/35'
+                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                }`}
+              >
+                <span className={`mt-0.5 shrink-0 ${active ? 'text-blue-300' : 'text-slate-500'}`}>{tabIcon(tab.id)}</span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium leading-tight">{tab.label}</span>
+                  <span className="mt-0.5 hidden text-[11px] text-slate-500 lg:block">{tab.hint}</span>
+                  {tab.id === 'files' && (
+                    <span className="mt-1 inline-block rounded-full bg-blue-600/25 px-1.5 py-0.5 text-[10px] font-semibold text-blue-100">
+                      {files.length} items
+                    </span>
+                  )}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+        <div className="mt-auto hidden border-t border-white/10 bg-[linear-gradient(180deg,rgba(2,6,23,0.5),rgba(2,6,23,0.92))] p-4 text-[11px] leading-relaxed text-slate-500 lg:block">
+          {jobId ? (
+            <>
+              <p className="font-medium text-slate-400">Active job</p>
+              <p className="mt-1 font-mono text-slate-300">{jobId}</p>
+            </>
+          ) : (
+            <p>No active job. Upload media to begin.</p>
+          )}
+        </div>
+      </aside>
+
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-40 bg-[radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_38%),linear-gradient(180deg,_rgba(255,255,255,0.7),_rgba(255,255,255,0))]" />
+        {/* Workspace hero — Sabah Civic `civic-hero` pattern */}
+        <header className="relative z-10 border-b border-slate-200/80 px-4 py-4 sm:px-6 lg:px-8 lg:pt-8">
+          <div className="civic-hero px-5 py-5 sm:px-8 sm:py-6">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">Court transcription workspace</p>
+                <h2 className="mt-3 truncate text-3xl font-semibold tracking-tight text-slate-950">
+                  {currentFile ? currentFile.originalName : 'No media loaded'}
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+                  Upload recordings, monitor pipeline status, and refine transcript output without changing core workflow behavior.
+                </p>
+              </div>
+              {currentFile && (
+                <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                  <span className="max-w-full truncate rounded-full bg-blue-50 px-3 py-1.5 font-mono text-blue-900/90">Output: {currentFile.name}</span>
+                  <span
+                    className={`rounded-full px-3 py-1.5 font-semibold capitalize ${
+                      currentFile.status === 'complete' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'
+                    }`}
+                  >
+                    {currentFile.status}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Main stage + inspector */}
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col xl:flex-row">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            {/* Video first in flow; overlays unchanged */}
+            <div className="mx-auto max-w-5xl">
+              <div className="mb-2 flex items-end justify-between gap-3">
+                <div>
+                  <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Hearing recording</h2>
+                  <p className="text-sm text-slate-600">Playback and on-screen transcript alignment</p>
                 </div>
                 {srtSegments.length > 0 && (
-                  <div className="absolute right-3 top-3 z-10 flex max-w-[260px] flex-col gap-2">
+                  <div className="hidden text-right sm:block">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Jump to time</p>
                     <input
                       type="text"
                       value={timeInput}
                       onChange={handleTimeInputChange}
                       placeholder="HH:MM:SS"
-                      className="h-10 rounded-xl border border-slate-500/60 bg-slate-900/85 px-3 text-center font-mono text-sm text-white outline-none ring-blue-500/50 transition focus:ring-2"
+                      className="mt-1 h-9 w-32 rounded-xl border border-[var(--civic-border)] bg-white px-2 text-center font-mono text-sm text-slate-800 shadow-sm outline-none ring-blue-600/30 focus:ring-2"
                     />
-                    <div className="truncate rounded-xl bg-slate-900/90 px-3 py-2 text-xs text-slate-200">
-                      {getSubtitleForTime(timeInput) || 'No subtitle at this time'}
-                    </div>
                   </div>
                 )}
-                <div className="aspect-video">
-                  <video
-                    ref={videoRef}
-                    controls
-                    crossOrigin="anonymous"
-                    src={currentFile.jobId ? `${API_BASE}/stream/${currentFile.jobId}/original.mp4` : `${API_BASE}/stream/${currentFile.originalName}`}
-                    onTimeUpdate={handleTimeUpdate}
-                    className="h-full w-full object-contain"
-                  />
-                </div>
               </div>
-            ) : (
-              <div className="rounded-[1.125rem] border border-dashed border-slate-300 bg-slate-50/80 px-6 py-16 text-center">
-                <p className="text-5xl">🎥</p>
-                <p className="mt-4 text-sm font-semibold uppercase tracking-wider text-slate-700">No media selected</p>
-                <p className="mt-2 text-sm text-slate-500">Upload a file from the Transcribe tab to begin.</p>
-              </div>
-            )}
-          </SectionCard>
 
-          {srtSegments.length > 0 && currentFile && (
-            <SectionCard icon="📝" title="Current Subtitle">
-              <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Live subtitle segment</p>
-                  {currentSubtitle && (
-                    <UiButton variant="outline" className="h-9 px-3 text-xs" onClick={handleEditClick}>
-                      Edit
-                    </UiButton>
+              {currentFile ? (
+                <div className="relative overflow-hidden rounded-[1.125rem] border border-[var(--civic-border)] bg-black shadow-[0_10px_34px_rgba(15,23,42,0.08)]">
+                  <div className="absolute left-3 top-3 z-10 max-w-[min(100%,20rem)] truncate rounded-full bg-black/70 px-2 py-1 text-xs text-white">
+                    {currentFile.originalName}
+                  </div>
+                  {srtSegments.length > 0 && (
+                    <div className="absolute right-3 top-3 z-10 flex max-w-[min(100%,18rem)] flex-col gap-2 sm:hidden">
+                      <input
+                        type="text"
+                        value={timeInput}
+                        onChange={handleTimeInputChange}
+                        placeholder="HH:MM:SS"
+                        className="h-9 rounded-xl border border-white/20 bg-black/70 px-2 text-center font-mono text-xs text-white outline-none ring-blue-400/50 focus:ring-2"
+                      />
+                      <div className="truncate rounded-xl border border-white/10 bg-black/75 px-2 py-1.5 text-[11px] text-slate-200">
+                        {getSubtitleForTime(timeInput) || 'No subtitle at this time'}
+                      </div>
+                    </div>
                   )}
-                </div>
-                {isEditing && editingSubtitle ? (
-                  <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                    <p className="font-mono text-xs text-slate-500">
-                      {formatTimestamp(editingSubtitle.start)} - {formatTimestamp(editingSubtitle.end)}
-                    </p>
-                    <textarea
-                      value={editingSubtitle.text}
-                      onChange={e => setEditingSubtitle({ ...editingSubtitle, text: e.target.value })}
-                      rows={4}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none ring-blue-500/50 transition focus:ring-2"
+                  <div className="aspect-video">
+                    <video
+                      ref={videoRef}
+                      controls
+                      crossOrigin="anonymous"
+                      src={currentFile.jobId ? `${API_BASE}/stream/${currentFile.jobId}/original.mp4` : `${API_BASE}/stream/${currentFile.originalName}`}
+                      onTimeUpdate={handleTimeUpdate}
+                      className="h-full w-full object-contain"
                     />
-                    <div className="flex justify-end gap-2">
-                      <UiButton variant="default" className="h-9 px-3 text-xs" onClick={handleSaveEdit}>
-                        Save
-                      </UiButton>
-                      <UiButton variant="outline" className="h-9 px-3 text-xs" onClick={handleCancelEdit}>
-                        Cancel
-                      </UiButton>
+                  </div>
+                </div>
+              ) : (
+                <Card className="flex flex-col items-center justify-center gap-4 border-dashed py-16 text-center">
+                  <IconFilm className="h-12 w-12 text-slate-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">No recording in the viewer</p>
+                    <p className="mt-1 max-w-sm text-xs text-slate-500">Upload a file from New transcription, or pick a completed item in Library.</p>
+                  </div>
+                </Card>
+              )}
+
+              {/* Subtitle block below player — was separate card in left column */}
+              {srtSegments.length > 0 && currentFile && (
+                <Card className="mt-5 p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Line at playhead</h3>
+                      <p className="mt-1 font-mono text-xs text-slate-500">
+                        {currentSubtitle
+                          ? `${formatTimestamp(currentSubtitle.start)} → ${formatTimestamp(currentSubtitle.end)}`
+                          : '—'}
+                      </p>
+                    </div>
+                    {currentSubtitle && !isEditing && (
+                      <Button variant="outline" size="sm" type="button" className="h-9 shrink-0 self-start text-xs" onClick={handleEditClick}>
+                        Edit line
+                      </Button>
+                    )}
+                  </div>
+                  <div className="mt-4">
+                    {isEditing && editingSubtitle ? (
+                      <div className="space-y-3 border-t border-slate-200/80 pt-4">
+                        <textarea
+                          value={editingSubtitle.text}
+                          onChange={e => setEditingSubtitle({ ...editingSubtitle, text: e.target.value })}
+                          rows={4}
+                          className="w-full rounded-xl border border-[var(--civic-border)] bg-[var(--civic-surface-soft)] px-3 py-2 text-sm text-slate-800 outline-none ring-blue-600/30 focus:ring-2"
+                        />
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <Button variant="primary" size="sm" type="button" className="h-9 text-xs" onClick={handleSaveEdit}>
+                            Save
+                          </Button>
+                          <Button variant="outline" size="sm" type="button" className="h-9 text-xs" onClick={handleCancelEdit}>
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="min-h-[4.5rem] text-base leading-relaxed text-slate-800">{currentSubtitle ? currentSubtitle.text : '…'}</p>
+                    )}
+                  </div>
+                  {srtSegments.length > 0 && (
+                    <div className="mt-4 hidden border-t border-slate-200/80 pt-3 sm:block">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Preview at typed time</p>
+                      <p className="mt-1 text-sm text-slate-600">{getSubtitleForTime(timeInput) || 'No subtitle at this time'}</p>
+                    </div>
+                  )}
+                </Card>
+              )}
+
+              {/* Progress under media — was below video in left stack as its own card */}
+              {jobId && (
+                <Card className="mt-5 grid gap-4 p-4 lg:grid-cols-[1fr_minmax(0,14rem)]">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Job progress</h3>
+                      <span className="font-mono text-xs text-slate-600">{progress?.percent ?? 0}%</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200/90">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-blue-700 to-sky-500 transition-all duration-300"
+                        style={{ width: `${progress?.percent || 0}%` }}
+                      />
+                    </div>
+                    <dl className="mt-4 grid grid-cols-3 gap-3 text-center">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 py-2">
+                        <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Chunks</dt>
+                        <dd className="text-lg font-semibold text-slate-900">{progress?.totalChunks ?? 0}</dd>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 py-2">
+                        <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Done</dt>
+                        <dd className="text-lg font-semibold text-slate-900">{progress?.completed ?? 0}</dd>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 py-2">
+                        <dt className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Span</dt>
+                        <dd className="truncate px-1 text-xs font-semibold text-slate-900">{progress?.currentChunk || '—'}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="flex min-h-[8rem] flex-col rounded-xl border border-slate-200 bg-slate-950">
+                    <p className="border-b border-slate-800 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Activity</p>
+                    <div className="min-h-0 flex-1 overflow-y-auto p-2 font-mono text-[10px] leading-relaxed text-slate-300">
+                      {logs.map((log, i) => (
+                        <div key={i} className="flex gap-1.5">
+                          <span className="shrink-0 text-slate-500">{log.time}</span>
+                          <span className="min-w-0 break-words">{log.message}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ) : (
-                  <div className="min-h-24 rounded-xl border border-slate-200 bg-white p-4 text-base leading-7 text-slate-800">
-                    {currentSubtitle ? currentSubtitle.text : '...'}
-                  </div>
-                )}
-              </div>
-            </SectionCard>
-          )}
-
-          {jobId && (
-            <SectionCard icon="📈" title="Transcription Progress">
-              <div className="space-y-4">
-                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                  <div className="h-full bg-blue-700 transition-all duration-300" style={{ width: `${progress?.percent || 0}%` }} />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                    <p className="text-xl font-bold text-slate-900">{progress?.totalChunks || 0}</p>
-                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Total Chunks</p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                    <p className="text-xl font-bold text-slate-900">{progress?.completed || 0}</p>
-                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Completed</p>
-                  </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                    <p className="truncate text-sm font-bold text-slate-900">{progress?.currentChunk || '-'}</p>
-                    <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Current</p>
-                  </div>
-                </div>
-                <div className="max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-xs text-slate-300">
-                  {logs.map((log, i) => (
-                    <div key={i} className="flex gap-2 py-0.5">
-                      <span className="text-slate-500">[{log.time}]</span>
-                      <span>{log.message}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </SectionCard>
-          )}
-        </section>
-
-        <section className="space-y-4">
-          <div className="rounded-[1.125rem] border border-slate-200 bg-white/95 p-1 shadow-sm">
-            <div className="grid grid-cols-3 gap-1">
-              {tabConfig.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold transition ${
-                    activeTab === tab.id
-                      ? 'border border-slate-200 bg-white text-slate-900 shadow-sm'
-                      : 'border border-transparent text-slate-600 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <span>{tab.icon}</span>
-                  <span>{tab.id === 'files' ? `Files (${files.length})` : tab.label}</span>
-                </button>
-              ))}
+                </Card>
+              )}
             </div>
           </div>
 
-          {activeTab === 'transcribe' && (
-            <SectionCard icon="📁" title="Upload Audio Or Video">
-              <input ref={mediaInputRef} type="file" accept="video/*,audio/*" onChange={handleFileSelect} className="hidden" />
-              <div
-                className="cursor-pointer rounded-[1.125rem] border border-dashed border-slate-300 bg-slate-50/80 p-10 text-center transition hover:border-blue-600 hover:bg-blue-50/60"
-                onDragOver={e => e.preventDefault()}
-                onDrop={handleDrop}
-                onClick={() => mediaInputRef.current?.click()}
-              >
-                <div className="mx-auto mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-blue-100 text-xl text-blue-700">🎬</div>
-                <h3 className="text-base font-semibold text-slate-900">Click or drag and drop media files</h3>
-                <p className="mt-1 text-sm text-slate-500">MP4, MKV, AVI, MP3, WAV and other common formats</p>
-              </div>
-            </SectionCard>
-          )}
+          {/* Inspector — tab tools; was entire right column of cards */}
+          <aside className="flex w-full shrink-0 flex-col border-t border-slate-200/80 bg-white/95 backdrop-blur-sm xl:w-[min(100%,26rem)] xl:border-l xl:border-t-0">
+            <div className="border-b border-[var(--civic-border)] bg-[color-mix(in_srgb,var(--civic-surface)_97%,transparent)] px-4 py-3 shadow-[0_8px_22px_rgba(15,23,42,0.04)]">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">Panel</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {activeTab === 'transcribe' && 'Ingest & queue'}
+                {activeTab === 'srt-edit' && 'Transcript file'}
+                {activeTab === 'files' && 'Matter library'}
+              </p>
+            </div>
 
-          {activeTab === 'srt-edit' && (
-            <SectionCard icon="📝" title="SRT Editor">
-              <div className="space-y-4">
-                <input ref={srtInputRef} type="file" accept=".srt" onChange={handleSrtFileSelect} className="hidden" />
-                <div
-                  className="cursor-pointer rounded-[1.125rem] border border-dashed border-slate-300 bg-slate-50/80 p-6 text-center transition hover:border-blue-600 hover:bg-blue-50/60"
-                  onClick={() => srtInputRef.current?.click()}
-                >
-                  <div className="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-700">📄</div>
-                  <h3 className="text-sm font-semibold text-slate-900">Click to upload an SRT file</h3>
-                  <p className="mt-1 text-xs text-slate-500">Or load a completed transcript from this project</p>
-                </div>
-
-                {srtEditContent && (
-                  <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                      <span className="font-semibold">Editing:</span> {srtEditFilename}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-8">
+              {activeTab === 'transcribe' && (
+                <div className="space-y-4">
+                  <input ref={mediaInputRef} type="file" accept="video/*,audio/*" onChange={handleFileSelect} className="hidden" />
+                  <div
+                    className="group flex cursor-pointer flex-col gap-4 rounded-[1.125rem] border-2 border-dashed border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md sm:flex-row sm:items-center"
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={handleDrop}
+                    onClick={() => mediaInputRef.current?.click()}
+                  >
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-blue-50 text-blue-700 transition-colors group-hover:bg-blue-700 group-hover:text-white">
+                      <IconUpload className="h-7 w-7" />
                     </div>
-                    <textarea
-                      value={srtEditContent}
-                      onChange={e => setSrtEditContent(e.target.value)}
-                      rows={20}
-                      className="w-full rounded-xl border border-slate-200 bg-white p-3 font-mono text-sm text-slate-700 outline-none ring-blue-500/50 transition focus:ring-2"
-                      placeholder="SRT content..."
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <UiButton variant="default" onClick={handleSrtSave} disabled={srtSaving}>
-                        {srtSaving ? 'Saving...' : 'Save SRT'}
-                      </UiButton>
-                      <UiButton
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-sm font-semibold text-slate-900">Drop files here or click to browse</p>
+                      <p className="mt-1 text-xs text-slate-600">MP4, MKV, AVI, MP3, WAV, and other common formats.</p>
+                    </div>
+                    <Button variant="primary" size="sm" type="button" className="h-9 shrink-0 text-xs" onClick={e => (e.stopPropagation(), mediaInputRef.current?.click())}>
+                      Browse
+                    </Button>
+                  </div>
+                  <p className="text-xs leading-relaxed text-slate-500">
+                    Files are transcribed on the server. Progress and logs appear in the workspace below the player once a job starts.
+                  </p>
+                </div>
+              )}
+
+              {activeTab === 'srt-edit' && (
+                <div className="flex h-full min-h-[20rem] flex-col gap-4">
+                  <input ref={srtInputRef} type="file" accept=".srt" onChange={handleSrtFileSelect} className="hidden" />
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="primary" size="sm" className="h-9 text-xs" onClick={() => srtInputRef.current?.click()}>
+                      Open .srt
+                    </Button>
+                    {srtEditContent && (
+                      <Button
+                        type="button"
                         variant="outline"
+                        size="sm"
+                        className="h-9 text-xs"
                         onClick={() => {
                           setSrtEditContent('')
                           setSrtEditFilename('')
                         }}
                       >
                         Clear
-                      </UiButton>
-                    </div>
+                      </Button>
+                    )}
                   </div>
-                )}
 
-                {completeFiles.length > 0 && !srtEditContent && (
-                  <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 p-4">
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">Quick load from completed files</p>
-                    <div className="flex flex-wrap gap-2">
-                      {completeFiles.map(file => (
-                        <UiButton
-                          key={file.name}
-                          variant="outline"
-                          className="h-9 px-3 text-xs"
-                          onClick={async () => {
-                            try {
-                              const res = await axios.get<string>(`${API_BASE}/download/${file.name}`)
-                              setSrtEditContent(res.data)
-                              setSrtEditFilename(file.name)
-                            } catch (err) {
-                              console.error('Failed to load SRT:', err)
-                            }
-                          }}
-                        >
-                          {file.name}
-                        </UiButton>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </SectionCard>
-          )}
-
-          {activeTab === 'files' && (
-            <SectionCard icon="🗂" title="Transcription Files">
-              {files.length > 0 ? (
-                <div className="space-y-2">
-                  {files.map(file => {
-                    const active = currentFile?.id === file.id
-                    return (
-                      <div
-                        key={file.id ?? file.name}
-                        onClick={() => selectFile(file)}
-                        className={`cursor-pointer rounded-xl border p-4 transition ${
-                          active ? 'border-blue-200 bg-blue-50/70 shadow-sm' : 'border-slate-200 bg-white hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">{file.originalName}</p>
-                            <p className="mt-1 truncate text-xs text-slate-500">→ {file.name}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider ${
-                                file.status === 'complete' ? 'border border-emerald-200 bg-emerald-100 text-emerald-700' : 'border border-amber-200 bg-amber-100 text-amber-700'
-                              }`}
-                            >
-                              {file.status}
-                            </span>
-                            {file.status === 'complete' && (
-                              <a
-                                href={`${API_BASE}/download/${file.name}`}
-                                onClick={e => e.stopPropagation()}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50"
-                              >
-                                ⬇
-                              </a>
-                            )}
-                          </div>
-                        </div>
+                  {completeFiles.length > 0 && !srtEditContent && (
+                    <div>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Load from library</p>
+                      <div className="civic-soft-block flex max-h-40 flex-col gap-1 overflow-y-auto p-2">
+                        {completeFiles.map(file => (
+                          <button
+                            key={file.name}
+                            type="button"
+                            className="truncate rounded-xl px-2 py-1.5 text-left text-xs text-slate-800 hover:bg-white"
+                            onClick={async () => {
+                              try {
+                                const res = await axios.get<string>(`${API_BASE}/download/${file.name}`)
+                                setSrtEditContent(res.data)
+                                setSrtEditFilename(file.name)
+                              } catch (err) {
+                                console.error('Failed to load SRT:', err)
+                              }
+                            }}
+                          >
+                            {file.name}
+                          </button>
+                        ))}
                       </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <div className="rounded-[1.125rem] border border-dashed border-slate-300 bg-slate-50/80 px-6 py-14 text-center">
-                  <p className="text-5xl">📭</p>
-                  <p className="mt-4 text-sm font-semibold uppercase tracking-wider text-slate-700">No files yet</p>
-                  <p className="mt-2 text-sm text-slate-500">Processed transcriptions will appear here.</p>
+                    </div>
+                  )}
+
+                  {srtEditContent ? (
+                    <div className="flex min-h-0 flex-1 flex-col gap-3">
+                      <p className="truncate rounded-xl border border-slate-200 bg-slate-50 px-2 py-1.5 font-mono text-xs text-slate-700">{srtEditFilename}</p>
+                      <textarea
+                        value={srtEditContent}
+                        onChange={e => setSrtEditContent(e.target.value)}
+                        className="min-h-[12rem] w-full flex-1 resize-y rounded-xl border border-[var(--civic-border)] bg-white p-3 font-mono text-xs leading-relaxed text-slate-800 outline-none ring-blue-600/30 focus:ring-2"
+                        placeholder="SRT content…"
+                      />
+                      <Button variant="primary" type="button" onClick={handleSrtSave} disabled={srtSaving}>
+                        {srtSaving ? 'Saving…' : 'Save SRT'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">Open an SRT or pick a completed transcript from the list above.</p>
+                  )}
                 </div>
               )}
-            </SectionCard>
-          )}
-        </section>
-      </main>
+
+              {activeTab === 'files' && (
+                <div className="space-y-3">
+                  {files.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Source</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="w-14 text-right">SRT</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {files.map(file => {
+                          const active = currentFile?.id === file.id
+                          return (
+                            <TableRow
+                              key={file.id ?? file.name}
+                              className={`cursor-pointer ${active ? 'bg-blue-50/80' : ''}`}
+                              onClick={() => selectFile(file)}
+                            >
+                              <TableCell>
+                                <span className="block font-medium text-slate-900">{file.originalName}</span>
+                                <span className="mt-0.5 block truncate font-mono text-[11px] text-slate-500">{file.name}</span>
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                    file.status === 'complete' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                  }`}
+                                >
+                                  {file.status}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {file.status === 'complete' ? (
+                                  <a
+                                    href={`${API_BASE}/download/${file.name}`}
+                                    className="text-sm font-medium text-blue-700 underline-offset-2 hover:text-blue-800 hover:underline"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    Get
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="civic-soft-block border-dashed py-12 text-center">
+                      <p className="text-sm font-medium text-slate-700">No files yet</p>
+                      <p className="mt-1 text-xs text-slate-500">Completed jobs will appear in this table.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
   )
 }
