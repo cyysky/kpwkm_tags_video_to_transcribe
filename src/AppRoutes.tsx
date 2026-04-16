@@ -21,20 +21,7 @@ function ProtectedAppShell() {
     navigate('/login', { replace: true })
   }
 
-  return (
-    <div>
-      <div className="fixed right-4 top-4 z-50">
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-        >
-          Logout
-        </button>
-      </div>
-      <App />
-    </div>
-  )
+  return <App onLogout={handleLogout} />
 }
 
 export default function AppRoutes() {

@@ -34,6 +34,10 @@ interface Log {
   message: string
 }
 
+interface AppProps {
+  onLogout?: () => void
+}
+
 type TabType = 'transcribe' | 'srt-edit' | 'files'
 
 const tabConfig: Array<{ id: TabType; label: string; hint: string }> = [
@@ -111,7 +115,7 @@ function formatSrtTimestamp(seconds: number): string {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`
 }
 
-function App() {
+function App({ onLogout }: AppProps) {
   const [activeTab, setActiveTab] = useState<TabType>('transcribe')
   const [files, setFiles] = useState<TranscriptionFile[]>([])
   const [currentFile, setCurrentFile] = useState<TranscriptionFile | null>(null)
@@ -384,6 +388,15 @@ function App() {
           })}
         </div>
         <div className="mt-auto hidden border-t border-white/10 bg-[linear-gradient(180deg,rgba(2,6,23,0.5),rgba(2,6,23,0.92))] p-4 text-[11px] leading-relaxed text-slate-500 lg:block">
+          {onLogout ? (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="mb-3 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-slate-200 transition hover:bg-white/10"
+            >
+              Logout
+            </button>
+          ) : null}
           {jobId ? (
             <>
               <p className="font-medium text-slate-400">Active job</p>
