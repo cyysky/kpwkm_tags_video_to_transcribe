@@ -39,7 +39,7 @@ Then open **http://localhost:28361** in your browser.
 
 ```
 .
-├── server.cjs          # Express backend API
+├── server.ts           # Express backend API
 ├── package.json        # Node dependencies
 ├── vite.config.js      # Vite configuration
 ├── index.html          # Entry HTML
@@ -75,7 +75,7 @@ VLLM_MODEL=qwen3-asr-1.7b
 PORT=28360
 ```
 
-Or edit `server.cjs` directly:
+Or edit `server.ts` directly:
 
 ```javascript
 const VLLM_API_URL = 'http://192.168.50.173:9999';  // vLLM API
