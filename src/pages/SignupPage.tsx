@@ -51,7 +51,7 @@ export default function SignupPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-10">
       <section className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <img src="/idB5PaNLl2_logos.jpeg" alt="App logo" className="mx-auto mb-6 h-16 w-auto" />
+        <img src="/assets/images/logo.jpeg" alt="App logo" className="mx-auto mb-6 h-16 w-auto" />
         <h1 className="text-center text-2xl font-semibold text-slate-900">Create account</h1>
         <p className="mt-1 text-center text-sm text-slate-500">Sign up to start using transcription tools.</p>
 
