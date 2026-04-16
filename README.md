@@ -26,6 +26,10 @@ A professional court transcription system that converts video/audio to subtitles
 # Install dependencies
 npm install
 
+# Initialize Prisma client + local SQLite schema (first run)
+npm run prisma:generate
+npx prisma migrate dev --name init
+
 # Start both backend and frontend
 npm run dev
 
@@ -34,6 +38,27 @@ npm run restart
 ```
 
 Then open **http://localhost:28361** in your browser.
+
+## Prisma / Database Commands
+
+Use these commands for auth database setup and schema updates:
+
+```bash
+# Generate Prisma client after schema changes
+npm run prisma:generate
+
+# Create and apply a new migration (development)
+npm run prisma:migrate -- --name <migration_name>
+
+# Example initial migration name
+npx prisma migrate dev --name init
+
+# If migrate is blocked in non-interactive environments, sync schema directly
+npx prisma db push --accept-data-loss
+
+# Open Prisma Studio (optional)
+npx prisma studio
+```
 
 ## Project Structure
 
