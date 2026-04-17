@@ -134,7 +134,6 @@ function App({ onLogout }: AppProps) {
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
-  const progressPollRef = useRef<number | null>(null)
   const lastProgressEventKeyRef = useRef<string>('')
   const mediaInputRef = useRef<HTMLInputElement>(null)
   const srtInputRef = useRef<HTMLInputElement>(null)
@@ -204,10 +203,6 @@ function App({ onLogout }: AppProps) {
         eventSourceRef.current.close()
         eventSourceRef.current = null
       }
-      if (progressPollRef.current !== null) {
-        window.clearInterval(progressPollRef.current)
-        progressPollRef.current = null
-      }
     }
   }, [])
 
@@ -238,10 +233,6 @@ function App({ onLogout }: AppProps) {
       addLog(`Job started: ${newJobId}`)
 
       if (eventSourceRef.current) eventSourceRef.current.close()
-      if (progressPollRef.current !== null) {
-        window.clearInterval(progressPollRef.current)
-        progressPollRef.current = null
-      }
 
       const progressUrls = buildProgressStreamUrls(newJobId)
       let urlIndex = 0
@@ -284,10 +275,7 @@ function App({ onLogout }: AppProps) {
           setFiles(prev => prev.map(f => (f.id === newJobId ? { ...f, status: 'complete', srtUrl: `${API_BASE}/download/${data.outputFile}` } : f)))
           setCurrentFile(prev => (prev?.id === newJobId ? { ...prev, status: 'complete', srtUrl: `${API_BASE}/download/${data.outputFile}` } : prev))
           loadSrtContent(data.outputFile)
-          if (progressPollRef.current !== null) {
-            window.clearInterval(progressPollRef.current)
-            progressPollRef.current = null
-          }
+          fetchFiles()
           if (eventSourceRef.current) {
             eventSourceRef.current.close()
             eventSourceRef.current = null
@@ -301,10 +289,6 @@ function App({ onLogout }: AppProps) {
             eventSourceRef.current.close()
             eventSourceRef.current = null
           }
-          if (progressPollRef.current !== null) {
-            window.clearInterval(progressPollRef.current)
-            progressPollRef.current = null
-          }
         }
       }
 
@@ -316,29 +300,6 @@ function App({ onLogout }: AppProps) {
           | { type: 'complete'; outputFile: string }
           | { type: 'error'; message: string }
         handleProgressData(data)
-      }
-
-      const startProgressPolling = (): void => {
-        if (progressPollRef.current !== null) return
-        addLog('Polling progress updates')
-        progressPollRef.current = window.setInterval(async () => {
-          try {
-            const pollRes = await axios.get<{
-              event?:
-                | { type: 'status'; message: string }
-                | { type: 'chunks-created'; count: number }
-                | { type: 'chunk-complete'; chunkIndex: number; totalChunks: number; start: string; end: string }
-                | { type: 'complete'; outputFile: string }
-                | { type: 'error'; message: string }
-                | null
-            }>(`${API_BASE}/progress-state/${newJobId}`)
-            if (pollRes.data?.event) {
-              handleProgressData(pollRes.data.event)
-            }
-          } catch {
-            // Keep polling in case server is temporarily unavailable.
-          }
-        }, 1000)
       }
 
       const connectProgressStream = (): void => {
@@ -368,11 +329,9 @@ function App({ onLogout }: AppProps) {
           }
 
           addLog('Progress stream disconnected')
-          startProgressPolling()
         }
       }
 
-      startProgressPolling()
       connectProgressStream()
     } catch (err) {
       const error = err as Error
@@ -433,6 +392,7 @@ function App({ onLogout }: AppProps) {
         { headers: { 'Content-Type': 'application/json' } }
       )
       addLog(`SRT file "${srtEditFilename}" saved successfully`)
+      fetchFiles()
     } catch (err) {
       const ax = err as { response?: { data?: { error?: string } }; message?: string }
       const detail = ax.response?.data?.error || ax.message || 'unknown error'
@@ -478,6 +438,7 @@ function App({ onLogout }: AppProps) {
       setIsEditing(false)
       setEditingSubtitle(null)
       addLog('Subtitle updated successfully')
+      fetchFiles()
     } catch (err) {
       const ax = err as { response?: { data?: { error?: string } }; message?: string }
       const detail = ax.response?.data?.error || ax.message || 'unknown error'
