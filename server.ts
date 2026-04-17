@@ -44,7 +44,28 @@ type Chunk = {
   end: number;
 };
 
-const jobs = new Map<string, unknown>();
+type ProgressEvent =
+  | { type: "status"; message: string }
+  | { type: "chunks-created"; count: number }
+  | {
+      type: "chunk-complete";
+      chunkIndex: number;
+      totalChunks: number;
+      start: string;
+      end: string;
+    }
+  | { type: "complete"; outputFile: string }
+  | { type: "error"; message: string };
+
+type JobState = {
+  status: "processing" | "complete" | "error";
+  inputFile: string;
+  outputFile: string;
+  originalName: string;
+  lastEvent?: ProgressEvent;
+};
+
+const jobs = new Map<string, JobState>();
 const clients = new Map<string, express.Response>();
 
 function formatSrtTimestamp(seconds: number) {
@@ -92,8 +113,19 @@ async function getAudioDuration(mp3File: string) {
   return parseFloat(stdout.trim());
 }
 
-function broadcastProgress(jobId: string, data: unknown) {
+function broadcastProgress(jobId: string, data: ProgressEvent) {
+  const job = jobs.get(jobId);
+  if (job) {
+    job.lastEvent = data;
+    if (data.type === "complete") {
+      job.status = "complete";
+    } else if (data.type === "error") {
+      job.status = "error";
+    }
+  }
+
   const client = clients.get(jobId);
+  console.log(`[job ${jobId}]`, data);
   if (client) {
     client.write(`data: ${JSON.stringify(data)}\n\n`);
   }
@@ -366,12 +398,14 @@ app.post("/api/transcribe", upload.single("file"), async (req, res) => {
   const inputFile = req.file.path;
   const originalName = req.file.originalname;
   const outputFile = path.join("outputs", `${path.parse(originalName).name}.srt`);
+  console.log(`[job ${jobId}] Upload received: ${originalName}`);
 
   if (!fs.existsSync("outputs")) {
     fs.mkdirSync("outputs", { recursive: true });
   }
 
   jobs.set(jobId, { status: "processing", inputFile, outputFile, originalName });
+  broadcastProgress(jobId, { type: "status", message: "Job queued..." });
 
   processTranscription(jobId, inputFile, outputFile, originalName);
 
@@ -380,10 +414,17 @@ app.post("/api/transcribe", upload.single("file"), async (req, res) => {
 
 app.get("/api/progress/:jobId", (req, res) => {
   const { jobId } = req.params;
+  console.log(`[job ${jobId}] SSE client connected`);
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
   clients.set(jobId, res);
+
+  const job = jobs.get(jobId);
+  if (job?.lastEvent) {
+    res.write(`data: ${JSON.stringify(job.lastEvent)}\n\n`);
+  }
+
   req.on("close", () => {
     clients.delete(jobId);
   });
@@ -644,7 +685,7 @@ app.get("/api/srt/*", (req, res) => {
   res.send(fs.readFileSync(filePath, "utf8"));
 });
 
-const PORT = process.env.PORT || 28360;
+const PORT = Number(process.env.PORT) || 28360;
 const HOST = process.env.HOST || "0.0.0.0";
 app.listen(PORT, HOST, () => {
   console.log(`Court Transcription Service running on http://${HOST}:${PORT}`);

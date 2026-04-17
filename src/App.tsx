@@ -17,7 +17,7 @@ interface TranscriptionFile {
   name: string
   originalName: string
   jobId?: string | null
-  status: 'processing' | 'complete'
+  status: 'processing' | 'complete' | 'error'
   srtUrl?: string
 }
 
@@ -226,6 +226,12 @@ function App({ onLogout }: AppProps) {
           loadSrtContent(res.data.outputFile)
         } else if (data.type === 'error') {
           addLog(`ERROR: ${data.message}`)
+          setProgress(prev => ({ ...(prev ?? { status: 'error' }), status: `error: ${data.message}` }))
+          setFiles(prev => prev.map(f => (f.id === newJobId ? { ...f, status: 'error' } : f)))
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close()
+            eventSourceRef.current = null
+          }
         }
       }
     } catch (err) {
@@ -428,7 +434,11 @@ function App({ onLogout }: AppProps) {
                   <span className="max-w-full truncate rounded-full bg-blue-50 px-3 py-1.5 font-mono text-blue-900/90">Output: {currentFile.name}</span>
                   <span
                     className={`rounded-full px-3 py-1.5 font-semibold capitalize ${
-                      currentFile.status === 'complete' ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900'
+                      currentFile.status === 'complete'
+                        ? 'bg-emerald-50 text-emerald-800'
+                        : currentFile.status === 'error'
+                          ? 'bg-rose-50 text-rose-800'
+                          : 'bg-amber-50 text-amber-900'
                     }`}
                   >
                     {currentFile.status}
@@ -730,7 +740,11 @@ function App({ onLogout }: AppProps) {
                               <TableCell>
                                 <span
                                   className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                                    file.status === 'complete' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                                    file.status === 'complete'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : file.status === 'error'
+                                        ? 'bg-rose-100 text-rose-800'
+                                        : 'bg-amber-100 text-amber-800'
                                   }`}
                                 >
                                   {file.status}
