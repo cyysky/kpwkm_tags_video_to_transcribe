@@ -13,7 +13,18 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: `http://localhost:${backendPort}`,
-        changeOrigin: true
+        changeOrigin: true,
+        ws: true,
+        // Disable buffering so Server-Sent Events (progress stream) reach the client immediately.
+        selfHandleResponse: false,
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            if ((proxyRes.headers['content-type'] || '').includes('text/event-stream')) {
+              proxyRes.headers['cache-control'] = 'no-cache, no-transform'
+              proxyRes.headers['x-accel-buffering'] = 'no'
+            }
+          })
+        }
       }
     }
   }

@@ -134,6 +134,8 @@ function App({ onLogout }: AppProps) {
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const progressPollRef = useRef<number | null>(null)
+  const lastProgressEventKeyRef = useRef<string>('')
   const mediaInputRef = useRef<HTMLInputElement>(null)
   const srtInputRef = useRef<HTMLInputElement>(null)
 
@@ -142,9 +144,20 @@ function App({ onLogout }: AppProps) {
     setLogs(prev => [...prev.slice(-50), { time, message }])
   }, [])
 
+  const buildProgressStreamUrls = useCallback((id: string): string[] => {
+    const urls = [`${API_BASE}/progress/${id}`]
+
+    const configuredBase = (import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL
+    if (configuredBase) {
+      urls.push(`${configuredBase.replace(/\/$/, '')}/progress/${id}`)
+    }
+
+    return Array.from(new Set(urls))
+  }, [])
+
   const loadSrtContent = useCallback(async (filename: string): Promise<void> => {
     try {
-      const res = await axios.get<string>(`${API_BASE}/download/${filename}`)
+      const res = await axios.get<string>(`${API_BASE}/srt/${filename}`)
       setSrtContent(res.data)
       setSrtSegments(parseSrt(res.data))
     } catch (err) {
@@ -156,25 +169,47 @@ function App({ onLogout }: AppProps) {
     try {
       const res = await axios.get<{ files: TranscriptionFile[] }>(`${API_BASE}/files`)
       const fileList = res.data.files || []
-      setFiles(fileList)
-      if (fileList.length > 0 && !currentFile) {
+      // Merge server list with any in-flight (processing) entries we already track
+      // so that an active upload doesn't get wiped from the UI.
+      setFiles(prev => {
+        const processing = prev.filter(f => f.status === 'processing')
+        const serverNames = new Set(fileList.map(f => f.name))
+        const merged = [
+          ...processing.filter(f => !serverNames.has(f.name)),
+          ...fileList
+        ]
+        return merged
+      })
+      setCurrentFile(prev => {
+        if (prev) return prev
         const completeFile = fileList.find(f => f.status === 'complete')
         if (completeFile) {
-          setCurrentFile(completeFile)
           loadSrtContent(completeFile.name)
+          return completeFile
         }
-      }
+        return null
+      })
     } catch (err) {
       console.error('Failed to fetch files:', err)
     }
-  }, [currentFile, loadSrtContent])
+  }, [loadSrtContent])
 
   useEffect(() => {
     fetchFiles()
-    return () => {
-      if (eventSourceRef.current) eventSourceRef.current.close()
-    }
   }, [fetchFiles])
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+      if (progressPollRef.current !== null) {
+        window.clearInterval(progressPollRef.current)
+        progressPollRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     setSrtSegments(parseSrt(srtContent))
@@ -197,43 +232,148 @@ function App({ onLogout }: AppProps) {
       const newJobId = res.data.jobId
       setJobId(newJobId)
       setProgress({ status: 'starting', percent: 0, completed: 0, totalChunks: 0 })
-      const newFile: TranscriptionFile = { id: newJobId, name: res.data.outputFile, originalName: file.name, status: 'processing' }
+      const newFile: TranscriptionFile = { id: newJobId, jobId: newJobId, name: res.data.outputFile, originalName: file.name, status: 'processing' }
       setFiles(prev => [newFile, ...prev])
       setCurrentFile(newFile)
       addLog(`Job started: ${newJobId}`)
 
       if (eventSourceRef.current) eventSourceRef.current.close()
-      eventSourceRef.current = new EventSource(`${API_BASE}/progress/${newJobId}`)
-      eventSourceRef.current.onmessage = (e: MessageEvent) => {
-        const data = JSON.parse(e.data)
+      if (progressPollRef.current !== null) {
+        window.clearInterval(progressPollRef.current)
+        progressPollRef.current = null
+      }
+
+      const progressUrls = buildProgressStreamUrls(newJobId)
+      let urlIndex = 0
+      let connected = false
+      // Reset per-upload dedup state and locally track finished chunk indices
+      // because the server reports chunks out of order.
+      lastProgressEventKeyRef.current = ''
+      const completedChunks = new Set<number>()
+      const handleProgressData = (
+        data:
+          | { type: 'status'; message: string }
+          | { type: 'chunks-created'; count: number }
+          | { type: 'chunk-complete'; chunkIndex: number; totalChunks: number; start: string; end: string }
+          | { type: 'complete'; outputFile: string }
+          | { type: 'error'; message: string }
+      ): void => {
+        const eventKey = JSON.stringify(data)
+        if (eventKey === lastProgressEventKeyRef.current) return
+        lastProgressEventKeyRef.current = eventKey
+
         if (data.type === 'status') {
           addLog(data.message)
           setProgress(prev => ({ ...(prev ?? { status: '' }), status: data.message }))
         } else if (data.type === 'chunks-created') {
           setProgress(prev => ({ ...(prev ?? { status: 'processing' }), totalChunks: data.count }))
         } else if (data.type === 'chunk-complete') {
-          const percent = Math.round((data.chunkIndex / data.totalChunks) * 100)
+          completedChunks.add(data.chunkIndex)
+          const done = completedChunks.size
+          const percent = Math.round((done / data.totalChunks) * 100)
           setProgress(prev => ({
             ...(prev ?? { status: 'processing' }),
-            completed: data.chunkIndex,
+            totalChunks: data.totalChunks,
+            completed: done,
             percent,
             currentChunk: `${data.start}s - ${data.end}s`
           }))
         } else if (data.type === 'complete') {
           addLog('Transcription complete!')
           setProgress(prev => ({ ...(prev ?? { status: 'complete' }), status: 'complete', percent: 100 }))
-          setFiles(prev => prev.map(f => (f.id === newJobId ? { ...f, status: 'complete', srtUrl: `${API_BASE}/download/${res.data.outputFile}` } : f)))
-          loadSrtContent(res.data.outputFile)
-        } else if (data.type === 'error') {
-          addLog(`ERROR: ${data.message}`)
-          setProgress(prev => ({ ...(prev ?? { status: 'error' }), status: `error: ${data.message}` }))
-          setFiles(prev => prev.map(f => (f.id === newJobId ? { ...f, status: 'error' } : f)))
+          setFiles(prev => prev.map(f => (f.id === newJobId ? { ...f, status: 'complete', srtUrl: `${API_BASE}/download/${data.outputFile}` } : f)))
+          setCurrentFile(prev => (prev?.id === newJobId ? { ...prev, status: 'complete', srtUrl: `${API_BASE}/download/${data.outputFile}` } : prev))
+          loadSrtContent(data.outputFile)
+          if (progressPollRef.current !== null) {
+            window.clearInterval(progressPollRef.current)
+            progressPollRef.current = null
+          }
           if (eventSourceRef.current) {
             eventSourceRef.current.close()
             eventSourceRef.current = null
           }
+        } else if (data.type === 'error') {
+          addLog(`ERROR: ${data.message}`)
+          setProgress(prev => ({ ...(prev ?? { status: 'error' }), status: `error: ${data.message}` }))
+          setFiles(prev => prev.map(f => (f.id === newJobId ? { ...f, status: 'error' } : f)))
+          setCurrentFile(prev => (prev?.id === newJobId ? { ...prev, status: 'error' } : prev))
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close()
+            eventSourceRef.current = null
+          }
+          if (progressPollRef.current !== null) {
+            window.clearInterval(progressPollRef.current)
+            progressPollRef.current = null
+          }
         }
       }
+
+      const handleProgressMessage = (e: MessageEvent): void => {
+        const data = JSON.parse(e.data) as
+          | { type: 'status'; message: string }
+          | { type: 'chunks-created'; count: number }
+          | { type: 'chunk-complete'; chunkIndex: number; totalChunks: number; start: string; end: string }
+          | { type: 'complete'; outputFile: string }
+          | { type: 'error'; message: string }
+        handleProgressData(data)
+      }
+
+      const startProgressPolling = (): void => {
+        if (progressPollRef.current !== null) return
+        addLog('Polling progress updates')
+        progressPollRef.current = window.setInterval(async () => {
+          try {
+            const pollRes = await axios.get<{
+              event?:
+                | { type: 'status'; message: string }
+                | { type: 'chunks-created'; count: number }
+                | { type: 'chunk-complete'; chunkIndex: number; totalChunks: number; start: string; end: string }
+                | { type: 'complete'; outputFile: string }
+                | { type: 'error'; message: string }
+                | null
+            }>(`${API_BASE}/progress-state/${newJobId}`)
+            if (pollRes.data?.event) {
+              handleProgressData(pollRes.data.event)
+            }
+          } catch {
+            // Keep polling in case server is temporarily unavailable.
+          }
+        }, 1000)
+      }
+
+      const connectProgressStream = (): void => {
+        const nextUrl = progressUrls[urlIndex]
+        if (!nextUrl) {
+          addLog('Unable to connect to progress stream')
+          return
+        }
+
+        addLog(`Connecting progress stream (${urlIndex + 1}/${progressUrls.length})...`)
+        eventSourceRef.current = new EventSource(nextUrl)
+        eventSourceRef.current.onmessage = handleProgressMessage
+        eventSourceRef.current.onopen = () => {
+          connected = true
+          addLog('Progress stream connected')
+        }
+        eventSourceRef.current.onerror = () => {
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close()
+            eventSourceRef.current = null
+          }
+
+          if (!connected && urlIndex < progressUrls.length - 1) {
+            urlIndex += 1
+            connectProgressStream()
+            return
+          }
+
+          addLog('Progress stream disconnected')
+          startProgressPolling()
+        }
+      }
+
+      startProgressPolling()
+      connectProgressStream()
     } catch (err) {
       const error = err as Error
       addLog(`Upload failed: ${error.message}`)
@@ -287,14 +427,17 @@ function App({ onLogout }: AppProps) {
     if (!srtEditContent || !srtEditFilename) return
     setSrtSaving(true)
     try {
-      const formData = new FormData()
-      formData.append('content', srtEditContent)
-      formData.append('filename', srtEditFilename)
-      await axios.post(`${API_BASE}/update-srt`, formData)
+      await axios.post(
+        `${API_BASE}/update-srt`,
+        { content: srtEditContent, filename: srtEditFilename },
+        { headers: { 'Content-Type': 'application/json' } }
+      )
       addLog(`SRT file "${srtEditFilename}" saved successfully`)
     } catch (err) {
+      const ax = err as { response?: { data?: { error?: string } }; message?: string }
+      const detail = ax.response?.data?.error || ax.message || 'unknown error'
       console.error('Failed to save SRT:', err)
-      addLog('Failed to save SRT file')
+      addLog(`Failed to save SRT file: ${detail}`)
     }
     setSrtSaving(false)
   }
@@ -324,10 +467,11 @@ function App({ onLogout }: AppProps) {
     })
     const newSrt = srtLines.join('\n')
     try {
-      const formData = new FormData()
-      formData.append('content', newSrt)
-      formData.append('filename', currentFile.name)
-      await axios.post(`${API_BASE}/update-srt`, formData)
+      await axios.post(
+        `${API_BASE}/update-srt`,
+        { content: newSrt, filename: currentFile.name },
+        { headers: { 'Content-Type': 'application/json' } }
+      )
       setSrtContent(newSrt)
       setSrtSegments(updatedSegments)
       setCurrentSubtitle(editingSubtitle)
@@ -335,8 +479,10 @@ function App({ onLogout }: AppProps) {
       setEditingSubtitle(null)
       addLog('Subtitle updated successfully')
     } catch (err) {
+      const ax = err as { response?: { data?: { error?: string } }; message?: string }
+      const detail = ax.response?.data?.error || ax.message || 'unknown error'
       console.error('Failed to save subtitle:', err)
-      addLog('Failed to save subtitle')
+      addLog(`Failed to save subtitle: ${detail}`)
     }
   }
 
@@ -671,15 +817,15 @@ function App({ onLogout }: AppProps) {
                   {completeFiles.length > 0 && !srtEditContent && (
                     <div>
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Load from library</p>
-                      <div className="civic-soft-block flex max-h-40 flex-col gap-1 overflow-y-auto p-2">
+                      <div className="civic-soft-block flex max-h-44 flex-col gap-1 overflow-y-auto p-2">
                         {completeFiles.map(file => (
                           <button
                             key={file.name}
                             type="button"
-                            className="truncate rounded-xl px-2 py-1.5 text-left text-xs text-slate-800 hover:bg-white"
+                            className="w-full rounded-xl border border-transparent px-2 py-2 text-left text-xs leading-5 text-slate-800 transition-colors hover:border-slate-200 hover:bg-white"
                             onClick={async () => {
                               try {
-                                const res = await axios.get<string>(`${API_BASE}/download/${file.name}`)
+                                const res = await axios.get<string>(`${API_BASE}/srt/${file.name}`)
                                 setSrtEditContent(res.data)
                                 setSrtEditFilename(file.name)
                               } catch (err) {
@@ -687,7 +833,7 @@ function App({ onLogout }: AppProps) {
                               }
                             }}
                           >
-                            {file.name}
+                            <span className="block truncate">{file.name}</span>
                           </button>
                         ))}
                       </div>

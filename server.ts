@@ -416,8 +416,13 @@ app.get("/api/progress/:jobId", (req, res) => {
   const { jobId } = req.params;
   console.log(`[job ${jobId}] SSE client connected`);
   res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+  // Send an initial comment so the dev proxy / browser flip the connection to "open"
+  // immediately, even before the first real event.
+  res.write(": connected\n\n");
   clients.set(jobId, res);
 
   const job = jobs.get(jobId);
@@ -425,8 +430,31 @@ app.get("/api/progress/:jobId", (req, res) => {
     res.write(`data: ${JSON.stringify(job.lastEvent)}\n\n`);
   }
 
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": keep-alive\n\n");
+    } catch {
+      clearInterval(heartbeat);
+    }
+  }, 15000);
+
   req.on("close", () => {
+    clearInterval(heartbeat);
     clients.delete(jobId);
+  });
+});
+
+app.get("/api/progress-state/:jobId", (req, res) => {
+  const { jobId } = req.params;
+  const job = jobs.get(jobId);
+
+  if (!job) {
+    return res.status(404).json({ error: "Job not found" });
+  }
+
+  return res.json({
+    status: job.status,
+    event: job.lastEvent ?? null
   });
 });
 
@@ -653,19 +681,27 @@ app.get("/api/stream/*", (req, res) => {
 });
 
 app.post("/api/update-srt", (req, res) => {
-  const { content, filename } = req.body;
-  if (!content || !filename) {
+  const { content, filename } = req.body ?? {};
+  if (typeof content !== "string" || typeof filename !== "string" || !filename) {
     return res.status(400).json({ error: "Missing content or filename" });
   }
 
-  const filePath = path.join("outputs", filename);
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: "File not found" });
+  // Reject path traversal / absolute paths and pin to outputs/.
+  const safeName = path.basename(filename);
+  if (!safeName || safeName !== filename.replace(/^outputs\//, "")) {
+    return res.status(400).json({ error: "Invalid filename" });
+  }
+  if (!safeName.toLowerCase().endsWith(".srt")) {
+    return res.status(400).json({ error: "Filename must end with .srt" });
   }
 
   try {
+    if (!fs.existsSync("outputs")) {
+      fs.mkdirSync("outputs", { recursive: true });
+    }
+    const filePath = path.join("outputs", safeName);
     fs.writeFileSync(filePath, content, "utf8");
-    res.json({ success: true, message: "SRT updated successfully" });
+    res.json({ success: true, message: "SRT saved successfully", filename: safeName });
   } catch (error) {
     const err = error as Error;
     res.status(500).json({ error: err.message });
