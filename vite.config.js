@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     port: frontendPort,
     host: '0.0.0.0',
+    allowedHosts: ['ai.pixel-space.co'],
     proxy: {
       '/api': {
         target: `http://localhost:${backendPort}`,
