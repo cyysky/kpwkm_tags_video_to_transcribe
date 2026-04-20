@@ -42,9 +42,9 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
+    <main className="flex min-h-screen items-center justify-center bg-gradient-to-b from-slate-100 via-blue-50 to-slate-100 px-4 py-10">
       <section className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <img src="/assets/images/logo.jpeg" alt="App logo" className="mx-auto mb-6 h-16 w-auto" />
+        <img src="/assets/images/logo.png" alt="App logo" className="mx-auto mb-6 h-32 w-auto" />
         <h1 className="text-center text-2xl font-semibold text-slate-900">Sign in</h1>
         <p className="mt-1 text-center text-sm text-slate-500">Use your account to continue.</p>
 
